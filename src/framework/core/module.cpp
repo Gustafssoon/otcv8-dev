@@ -38,6 +38,11 @@ bool Module::load()
     if(m_loaded)
         return true;
 
+    struct ModuleLoadGcPause {
+        ModuleLoadGcPause() { g_lua.gcPauseEnter(); }
+        ~ModuleLoadGcPause() { g_lua.gcPauseLeave(); }
+    } gcPause;
+
     auto errorHandler = [&] (const std::string& error) {
         g_lua.getGlobalField("package", "loaded");
         g_lua.pushNil();

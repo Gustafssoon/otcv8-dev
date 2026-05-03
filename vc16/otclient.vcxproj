@@ -31,7 +31,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='OpenGL|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <WholeProgramOptimization>PGOptimize</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -39,7 +39,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DirectX|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <WholeProgramOptimization>PGOptimize</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -47,7 +47,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_lib|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -55,7 +55,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <UseOfMfc>false</UseOfMfc>
     <WholeProgramOptimization>false</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -83,6 +83,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='OpenGL|Win32'">
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);../src;</IncludePath>
     <TargetName>otclient_gl</TargetName>
+    <OTCLIENT_LIBDEPS>zs.lib;libssl.lib;physfs-static.lib;winmm.lib;lua51.lib;dbghelp.lib;kernel32.lib;user32.lib;shell32.lib;gdi32.lib;advapi32.lib;Ole32.lib;psapi.lib;bcrypt.lib;ucrt.lib;vcruntime.lib;msvcrt.lib;mincore_downlevel.lib;mincore.lib;</OTCLIENT_LIBDEPS>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DirectX|Win32'">
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);../src;</IncludePath>
@@ -151,10 +152,10 @@
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>$(OTCLIENT_LIBDEPS);glew32.lib;opengl32.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(OTCLIENT_LIBDEPS);libglew32.lib;opengl32.lib;avrt.lib</AdditionalDependencies>
       <ShowProgress>NotSet</ShowProgress>
       <LinkStatus>false</LinkStatus>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\vcpkg\installed\x86-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <PreventDllBinding>true</PreventDllBinding>
     </Link>
   </ItemDefinitionGroup>
@@ -254,8 +255,8 @@
     </ResourceCompile>
     <Lib>
       <LinkTimeCodeGeneration>true</LinkTimeCodeGeneration>
-      <AdditionalDependencies>$(ProjectDir)angle\lib\libGLESv2.dll.lib;$(ProjectDir)angle\lib\libEGL.dll.lib;vorbis.lib;ogg.lib;bz2d.lib;zip.lib;libssl.lib;OpenAL32.lib;lzma.lib;vorbisfile.lib;zlibd.lib;libcrypto.lib;physfs-static.lib;lua51.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\a\otclient\vcpkg\installed\x86-windows-static\debug\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(ProjectDir)angle\lib\libGLESv2.dll.lib;$(ProjectDir)angle\lib\libEGL.dll.lib;vorbis.lib;ogg.lib;bz2d.lib;zip.lib;libssl.lib;OpenAL32.lib;lzma.lib;vorbisfile.lib;zsd.lib;libcrypto.lib;physfs-static.lib;lua51.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\vcpkg\installed\x86-windows-static\debug\lib</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Lib>
     <ProjectReference>

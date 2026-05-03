@@ -39,7 +39,34 @@ extern "C" {
 
 #include "lbitlib.h"
 
+namespace {
+struct ScopedLuaGcPause {
+    ScopedLuaGcPause(const ScopedLuaGcPause&) = delete;
+    ScopedLuaGcPause& operator=(const ScopedLuaGcPause&) = delete;
+    ScopedLuaGcPause() { g_lua.gcPauseEnter(); }
+    ~ScopedLuaGcPause() { g_lua.gcPauseLeave(); }
+};
+} // namespace
+
 LuaInterface g_lua;
+
+int LuaInterface::s_gcPauseDepth = 0;
+
+void LuaInterface::gcPauseEnter()
+{
+    if (s_gcPauseDepth++ == 0) {
+        VALIDATE(L);
+        lua_gc(L, LUA_GCSTOP, 0);
+    }
+}
+
+void LuaInterface::gcPauseLeave()
+{
+    if (s_gcPauseDepth > 0 && --s_gcPauseDepth == 0) {
+        VALIDATE(L);
+        lua_gc(L, LUA_GCRESTART, 0);
+    }
+}
 
 LuaInterface::LuaInterface()
 {
@@ -471,6 +498,12 @@ int LuaInterface::safeCall(int numArgs, int numRets, const std::shared_ptr<std::
 {
     VALIDATE(hasIndex(-numArgs-1));
 
+    // Pause incremental GC for the entire pcall: lj_mem_newgco inside pcall can trigger
+    // a GC sweep step that leaves the string intern table in an intermediate state.
+    // If a C++ callback then throws and the catch handler calls traceback() → lua_getfield
+    // → lj_str_new, it walks the partially-swept hash chain and crashes (AV at lj_str_new+0x92).
+    ScopedLuaGcPause gcPause;
+
     // saves the current stack size for calculating the number of results later
     int previousStackSize = stackSize();
 
@@ -606,35 +639,63 @@ int LuaInterface::newSandboxEnv()
 
 int LuaInterface::luaScriptLoader(lua_State* L)
 {
-    // loads the script as a function
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
     std::string fileName = g_lua.popString();
 
     try {
         g_lua.loadScript(fileName);
+        g_lua.L = prevL;
         return 1;
     } catch(stdext::exception& e) {
         g_lua.pushString(std::string("\n\t") + e.what());
+        g_lua.L = prevL;
         return 1;
     }
 }
 
 int LuaInterface::lua_dofile(lua_State* L)
 {
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
     std::string file = g_lua.popString();
+
+    /* Pause GC while loading + running the chunk: incremental GC during large scripts
+     * (e.g. corelib const.lua) can finalize C++ function userdata and AV in luaCollectCppFunction. */
+    g_lua.gcPauseEnter();
 
     try {
         g_lua.loadScript(file);
-        g_lua.call(0, LUA_MULTRET);
-        return g_lua.stackSize();
-    } catch(stdext::exception& e) {
+        const int err = g_lua.pcall(0, LUA_MULTRET, 0);
+        if (err != 0) {
+            const std::string msg = g_lua.popString();
+            g_lua.gcPauseLeave();
+            g_lua.pushString(msg);
+            g_lua.L = prevL;
+            g_lua.error();
+            return 0;
+        }
+    } catch (stdext::exception& e) {
+        g_lua.gcPauseLeave();
         g_lua.pushString(e.what());
+        g_lua.L = prevL;
         g_lua.error();
         return 0;
     }
+
+    g_lua.gcPauseLeave();
+    /* Must match Lua stack exactly; wrong count corrupts the VM and breaks later C calls. */
+    g_lua.L = prevL;
+    return lua_gettop(L);
 }
 
 int LuaInterface::lua_dofiles(lua_State* L)
 {
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
     std::string contains = "";
     if(g_lua.getTop() > 2) {
         contains = g_lua.popString();
@@ -646,21 +707,39 @@ int LuaInterface::lua_dofiles(lua_State* L)
     }
 
     std::string directory = g_lua.popString();
-    g_lua.loadFiles(directory, recursive, contains);
 
+    /* One pause for the whole directory: restarting GC between each file left a window
+     * where lj_gc_step could still AV in luaCollectCppFunction while loading many scripts. */
+    g_lua.gcPauseEnter();
+    try {
+        g_lua.loadFiles(directory, recursive, contains);
+    } catch(stdext::exception& e) {
+        g_lua.gcPauseLeave();
+        g_lua.pushString(e.what());
+        g_lua.L = prevL;
+        g_lua.error();
+        return 0;
+    }
+    g_lua.gcPauseLeave();
+    g_lua.L = prevL;
     return 0;
 }
 
 int LuaInterface::lua_loadfile(lua_State* L)
 {
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
     std::string fileName = g_lua.popString();
 
     try {
         g_lua.loadScript(fileName);
+        g_lua.L = prevL;
         return 1;
     } catch(stdext::exception& e) {
         g_lua.pushNil();
         g_lua.pushString(e.what());
+        g_lua.L = prevL;
         g_lua.error();
         return 2;
     }
@@ -668,23 +747,39 @@ int LuaInterface::lua_loadfile(lua_State* L)
 
 int LuaInterface::luaErrorHandler(lua_State* L)
 {
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
     // pops the error message
     auto error = g_lua.popString();
 
     // prevents repeated tracebacks
-    if(error.find("stack traceback:") == std::string::npos)
-        error = g_lua.traceback(error, 1);
+    if(error.find("stack traceback:") == std::string::npos) {
+        try { error = g_lua.traceback(error, 1); } catch (...) {}
+    }
 
     // pushes the new error message with traceback information
     g_lua.pushString(error);
+    g_lua.L = prevL;
     return 1;
 }
 
 int LuaInterface::luaCppFunctionCallback(lua_State* L)
 {
-    // retrieves function pointer from userdata
-    auto funcPtr = static_cast<LuaCppFunctionPtr*>(g_lua.popUpvalueUserdata());
-    VALIDATE(funcPtr);
+    // When called from a Lua coroutine, L != g_lua.L.  All Lua API calls must use
+    // the coroutine's state, so swap g_lua.L for the duration of this callback.
+    lua_State* prevL = g_lua.L;
+    g_lua.L = L;
+
+    auto funcPtr = static_cast<LuaCppFunctionPtr*>(lua_touserdata(L, lua_upvalueindex(1)));
+
+    if (!funcPtr || !funcPtr->get()) {
+        g_logger.error("luaCppFunctionCallback: invalid function pointer (upvalue cleared)");
+        g_lua.L = prevL;
+        lua_pushliteral(L, "luaCppFunctionCallback: null/reset function pointer");
+        lua_error(L);
+        return 0;
+    }
 
     int numRets = 0;
 
@@ -701,27 +796,42 @@ int LuaInterface::luaCppFunctionCallback(lua_State* L)
             throw stdext::exception(stdext::format("LuaInterface::luaCppFunctionCallback, numRets != g_lua.stackSize() (%i != %i)", numRets, g_lua.stackSize()));
         }
 #endif
-    } catch(stdext::exception& e) {
-        // cleanup stack
+    } catch(std::exception& e) {
+        // Catches stdext::exception AND std::runtime_error / boost exceptions / std::bad_alloc etc.
         while(g_lua.stackSize() > 0)
             g_lua.pop();
         numRets = 0;
-        g_lua.pushString(stdext::format("C++ call failed: %s", g_lua.traceback(e.what())));
+        // Guard traceback: if L is partially corrupted, calling into Lua here can crash.
+        std::string tb;
+        try { tb = g_lua.traceback(e.what()); } catch (...) { tb = e.what(); }
+        g_lua.pushString(stdext::format("C++ call failed: %s", tb));
+        g_lua.L = prevL;
         g_lua.error();
+        return 0;
     }
     catch (...) {
-        g_logger.fatal(stdext::format("Critical lua error!\nC++ call failed:\n%s|%s", g_lua.getCurrentFunction(), g_lua.traceback("fatal error")));
-    } 
+        // Reaches here for SEH exceptions (AV, stack overflow) — Lua state may be corrupted.
+        // Never call Lua API here; log the current function name safely then abort.
+        std::string func;
+        try { func = g_lua.getCurrentFunction(); } catch (...) { func = "unknown"; }
+        g_lua.L = prevL;
+        g_logger.fatal(stdext::format("Critical lua error!\nC++ call failed:\n%s|fatal error (non-std exception)", func));
+        return 0;
+    }
 
+    g_lua.L = prevL;
     return numRets;
 }
 
 int LuaInterface::luaCollectCppFunction(lua_State* L)
 {
-    auto funcPtr = static_cast<LuaCppFunctionPtr*>(g_lua.popUserdata());
-    VALIDATE(funcPtr);
-    funcPtr->reset();
-    g_lua.m_totalFuncRefs--;
+    if (lua_gettop(L) < 1)
+        return 0;
+    auto funcPtr = static_cast<LuaCppFunctionPtr*>(lua_touserdata(L, -1));
+    if (funcPtr) {
+        funcPtr->reset();
+        g_lua.m_totalFuncRefs--;
+    }
     return 0;
 }
 
@@ -1252,6 +1362,8 @@ void LuaInterface::pushCFunction(LuaCFunction func, int n)
 
 void LuaInterface::pushCppFunction(const LuaCppFunction& func)
 {
+    ScopedLuaGcPause pause;
+
     // create a pointer to func (this pointer will hold the function existence)
     new(newUserdata(sizeof(LuaCppFunctionPtr))) LuaCppFunctionPtr(new LuaCppFunction(func));
     m_totalFuncRefs++;
@@ -1407,8 +1519,15 @@ void LuaInterface::loadFiles(std::string directory, bool recursive, std::string 
 
         try {
             g_lua.loadScript(fullPath);
-            g_lua.call(0, 0);
-        } catch(stdext::exception& e) {
+            const int err = g_lua.pcall(0, 0, 0);
+            if (err != 0) {
+                const std::string msg = g_lua.popString();
+                g_lua.gcPauseLeave();
+                g_lua.pushString(msg);
+                g_lua.error();
+            }
+        } catch (stdext::exception& e) {
+            g_lua.gcPauseLeave();
             g_lua.pushString(e.what());
             g_lua.error();
         }

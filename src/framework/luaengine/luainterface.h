@@ -229,6 +229,9 @@ public:
 
     void collectGarbage();
 
+    void gcPauseEnter();
+    void gcPauseLeave();
+
     void loadBuffer(const std::string& buffer, const std::string& source);
 
     std::string generateByteCode(const std::string & buffer, std::string source);
@@ -358,6 +361,7 @@ private:
     int m_totalObjRefs;
     int m_totalFuncRefs;
     int m_globalEnv;
+    static int s_gcPauseDepth;
 };
 
 extern LuaInterface g_lua;
