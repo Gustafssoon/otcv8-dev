@@ -850,7 +850,10 @@ void LuaInterface::createLuaState()
     luaL_openlibs(L);
 
     // load bit32 lib for bitwise operations
+    // luaopen_bit32 leaves the table on the stack regardless of how luaL_newlib is defined;
+    // lua_setglobal registers it and pops it so the stack stays balanced.
     luaopen_bit32(L);
+    lua_setglobal(L, "bit32");
 
     // creates weak table
     newTable();

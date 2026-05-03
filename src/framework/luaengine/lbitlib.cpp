@@ -163,13 +163,15 @@ static lua_Unsigned luaL_checkunsigned (lua_State *L, int arg) {
   return r;
 }
 
-/* ----- Lua 5.2 luaL_newlib() compatibility (skip if LuaJIT/lauxlib already defines it): ----- */
+/* ----- Lua 5.2 luaL_newlib() compatibility ----- */
+/* LuaJIT lauxlib.h defines luaL_newlib as (luaL_newlibtable+luaL_setfuncs), which pushes
+ * the table but does NOT set it as a global.  We need luaL_register so that bit32 becomes
+ * a global accessible to all Lua code.  Unconditionally override the definition. */
 
 #define LUAMOD_API  LUALIB_API
 #define LUA_BIT32LIBNAME "bit32"
-#ifndef luaL_newlib
+#undef  luaL_newlib
 #define luaL_newlib(x, y) luaL_register(x, LUA_BIT32LIBNAME, y)
-#endif
 
 /* ----- avoid a 'symbol redefined' warning below ----- */
 
