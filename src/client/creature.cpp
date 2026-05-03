@@ -653,7 +653,7 @@ void Creature::setName(const std::string& name)
         const std::string creatureName = name.substr(newLinePos + 1);
 
         if (!title.empty() && !creatureName.empty()) {
-            m_name = name;
+            m_name = creatureName;
             m_nameCache.setText(creatureName);
             setTitle(title, "verdana-11px-rounded", Color(160, 80, 255));
             return;
