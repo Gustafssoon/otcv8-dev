@@ -644,8 +644,25 @@ void Creature::terminateWalk()
 
 void Creature::setName(const std::string& name)
 {
-    m_nameCache.setText(name);
+    const size_t newLinePos = name.find('\n');
+    const bool hasTagPrefix = name.size() > 3 && name[0] == '[';
+    const bool hasValidTag = hasTagPrefix && newLinePos != std::string::npos && newLinePos > 2 && name[newLinePos - 1] == ']';
+
+    if (hasValidTag && newLinePos + 1 < name.size()) {
+        const std::string title = name.substr(0, newLinePos);
+        const std::string creatureName = name.substr(newLinePos + 1);
+
+        if (!title.empty() && !creatureName.empty()) {
+            m_name = name;
+            m_nameCache.setText(creatureName);
+            setTitle(title, "verdana-11px-rounded", Color(160, 80, 255));
+            return;
+        }
+    }
+
     m_name = name;
+    m_nameCache.setText(name);
+    m_titleCache.setText("");
 }
 
 void Creature::setHealthPercent(uint8 healthPercent)
