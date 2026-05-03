@@ -23,6 +23,7 @@
 #include "inputmessage.h"
 #include <framework/util/crypt.h>
 #include <client/map.h>
+#include <climits>
 
 InputMessage::InputMessage()
 {

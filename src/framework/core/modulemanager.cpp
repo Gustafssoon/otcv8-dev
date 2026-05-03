@@ -27,6 +27,25 @@
 #include <framework/core/application.h>
 #include <list>
 
+namespace {
+// Lua sometimes passes a chunk path (e.g. @/modules/foo/bar.lua) where the module id is "foo".
+std::string moduleFolderFromPath(const std::string& s)
+{
+    std::string path = s;
+    if (!path.empty() && path[0] == '@')
+        path.erase(0, 1);
+    const std::string key = "/modules/";
+    const auto k = path.find(key);
+    if (k == std::string::npos)
+        return {};
+    const size_t start = k + key.length();
+    const auto slash = path.find('/', start);
+    if (slash == std::string::npos || slash == start)
+        return {};
+    return path.substr(start, slash - start);
+}
+} // namespace
+
 ModuleManager g_modules;
 
 void ModuleManager::clear()
@@ -101,9 +120,18 @@ ModulePtr ModuleManager::discoverModule(const std::string& moduleFile)
 
 void ModuleManager::ensureModuleLoaded(const std::string& moduleName)
 {
-    ModulePtr module = g_modules.getModule(moduleName);
-    if(!module || !module->load())
-        g_logger.fatal(stdext::format("Unable to load '%s' module", moduleName));
+    std::string name = moduleName;
+    ModulePtr module = getModule(name);
+    if (!module) {
+        const std::string alt = moduleFolderFromPath(name);
+        if (!alt.empty() && alt != name) {
+            g_logger.debug(stdext::format("ensureModuleLoaded: '%s' not found as module id; using '%s'", name, alt));
+            name = alt;
+            module = getModule(name);
+        }
+    }
+    if (!module || !module->load())
+        g_logger.fatal(stdext::format("Unable to load '%s' module", name));
 }
 
 void ModuleManager::unloadModules()

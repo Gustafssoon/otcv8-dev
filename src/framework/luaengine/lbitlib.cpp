@@ -44,6 +44,8 @@ extern "C" {
 #endif
 }
 
+#include <climits>
+
 /* ----- adapted from lua-5.2.0 luaconf.h: ----- */
 
 /*
@@ -161,11 +163,13 @@ static lua_Unsigned luaL_checkunsigned (lua_State *L, int arg) {
   return r;
 }
 
-/* ----- Lua 5.2 luaL_newlib() compatibility: ----- */
+/* ----- Lua 5.2 luaL_newlib() compatibility (skip if LuaJIT/lauxlib already defines it): ----- */
 
 #define LUAMOD_API  LUALIB_API
 #define LUA_BIT32LIBNAME "bit32"
+#ifndef luaL_newlib
 #define luaL_newlib(x, y) luaL_register(x, LUA_BIT32LIBNAME, y)
+#endif
 
 /* ----- avoid a 'symbol redefined' warning below ----- */
 

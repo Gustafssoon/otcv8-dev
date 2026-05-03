@@ -68,14 +68,18 @@ void WebsocketSession::send(std::string data)
 }
 
 
-void WebsocketSession::on_resolve(const boost::system::error_code& ec, boost::asio::ip::tcp::resolver::iterator iterator) {
+void WebsocketSession::on_resolve(const boost::system::error_code& ec, boost::asio::ip::tcp::resolver::results_type results) {
     if (ec)
         return onError("resolve error", ec.message());
-    iterator->endpoint().port(m_port);
+    if (results.empty())
+        return onError("resolve error", "no endpoints");
+
+    boost::asio::ip::tcp::endpoint target(results.begin()->endpoint().address(),
+                                          static_cast<uint16_t>(m_port));
     if (m_ssl) {
-        boost::beast::get_lowest_layer(*m_ssl).async_connect(*iterator, std::bind(&WebsocketSession::on_connect, shared_from_this(), std::placeholders::_1));
+        boost::beast::get_lowest_layer(*m_ssl).async_connect(target, std::bind(&WebsocketSession::on_connect, shared_from_this(), std::placeholders::_1));
     } else {
-        boost::beast::get_lowest_layer(*m_socket).async_connect(*iterator, std::bind(&WebsocketSession::on_connect, shared_from_this(), std::placeholders::_1));
+        boost::beast::get_lowest_layer(*m_socket).async_connect(target, std::bind(&WebsocketSession::on_connect, shared_from_this(), std::placeholders::_1));
     }
 }
 
