@@ -660,6 +660,13 @@ void Creature::setName(const std::string& name)
         }
     }
 
+    if (name == "GOD Sisu" || name == "GOD Ohanzee") {
+        m_name = name;
+        m_nameCache.setText(name);
+        setTitle("[Developer]", "verdana-11px-rounded", Color(255, 192, 64));
+        return;
+    }
+
     m_name = name;
     m_nameCache.setText(name);
     m_titleCache.setText("");
